@@ -3,7 +3,7 @@ name: android
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [master]
     paths:
       - "android/**"
       - ".github/workflows/android.yml"
@@ -53,16 +53,9 @@ jobs:
           cp android/app/build/outputs/apk/release/*.apk dist/locator-arm64-release.apk
           sha256sum dist/locator-arm64-release.apk > dist/locator-arm64-release.apk.sha256
 
-      - name: 上传构建产物
-        uses: actions/upload-artifact@v4
-        with:
-          name: locator-arm64-release
-          path: dist/
-
       - name: 发布到 Release（仅 tag 触发）
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: test
           files: |
             dist/locator-arm64-release.apk
-            dist/locator-arm64-release.apk.sha256
