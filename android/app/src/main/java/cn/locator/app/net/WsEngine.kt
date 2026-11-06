@@ -124,6 +124,7 @@ object WsEngine {
             Log.i(TAG, "ws open")
             backoffMs = 2000L
             connState.value = ConnState.Online
+            error.value = null
         }
 
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -131,8 +132,16 @@ object WsEngine {
         }
 
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log.w(TAG, "ws failure: ${t.message}")
+            val code = response?.code
+            Log.w(TAG, "ws failure code=$code: ${t.message}")
             connState.value = ConnState.Offline
+            if (code == 401) {
+                // 登录失效：停止无意义重连，提示重新登录
+                wantConnected = false
+                error.value = "登录已失效，请退出后重新登录"
+                return
+            }
+            error.value = "连接失败: ${t.message ?: ("HTTP $code")}"
             scheduleReconnect()
         }
 

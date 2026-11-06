@@ -27,12 +27,18 @@ android {
 
     signingConfigs {
         create("release") {
+            // 四个变量齐全且 keystore 文件存在才启用，否则保持空配置（由 buildTypes 回退 debug）
             val ks = System.getenv("KEYSTORE_FILE")
-            if (ks != null && file(ks).exists()) {
+            val ksPass = System.getenv("KEYSTORE_PASSWORD")
+            val alias = System.getenv("KEY_ALIAS")
+            val keyPass = System.getenv("KEY_PASSWORD")
+            if (!ks.isNullOrBlank() && !ksPass.isNullOrBlank() &&
+                !alias.isNullOrBlank() && !keyPass.isNullOrBlank() && file(ks).exists()
+            ) {
                 storeFile = file(ks)
-                storePassword = System.getenv("KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("KEY_ALIAS")
-                keyPassword = System.getenv("KEY_PASSWORD")
+                storePassword = ksPass
+                keyAlias = alias
+                keyPassword = keyPass
             }
         }
     }
@@ -47,9 +53,15 @@ android {
                 "proguard-rules.pro",
             )
             val ks = System.getenv("KEYSTORE_FILE")
-            signingConfig = if (ks != null && file(ks).exists()) {
+            val ksPass = System.getenv("KEYSTORE_PASSWORD")
+            val alias = System.getenv("KEY_ALIAS")
+            val keyPass = System.getenv("KEY_PASSWORD")
+            val hasReleaseSigning = !ks.isNullOrBlank() && !ksPass.isNullOrBlank() &&
+                !alias.isNullOrBlank() && !keyPass.isNullOrBlank() && file(ks).exists()
+            signingConfig = if (hasReleaseSigning) {
                 signingConfigs.getByName("release")
             } else {
+                logger.lifecycle("WARN: release 签名环境变量不完整，回退 debug 签名")
                 signingConfigs.getByName("debug")
             }
         }

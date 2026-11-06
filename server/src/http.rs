@@ -107,6 +107,7 @@ async fn ws_handler(
 ) -> Response {
     let token = params.get("token").cloned().unwrap_or_default();
     let Some((user_id, username)) = auth::verify_token(&token, &state.jwt_secret) else {
+        tracing::warn!("WS 握手被拒绝: token 无效或签名密钥不匹配（可能换过数据库）");
         return err(StatusCode::UNAUTHORIZED, "token 无效");
     };
     upgrade

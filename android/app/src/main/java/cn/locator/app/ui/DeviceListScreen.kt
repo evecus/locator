@@ -32,6 +32,7 @@ fun DeviceListScreen(
     val ctx = LocalContext.current
     val devices by WsEngine.devices.collectAsState()
     val conn by WsEngine.connState.collectAsState()
+    val err by WsEngine.error.collectAsState()
 
     Scaffold(
         topBar = {
@@ -68,6 +69,14 @@ fun DeviceListScreen(
                     },
                     fontSize = 13.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            err?.let {
+                Text(
+                    it,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }
             HorizontalDivider()
