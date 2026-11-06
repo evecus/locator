@@ -157,6 +157,56 @@ impl Db {
         );
         secret
     }
+
+    /// 管理员密码（argon2 hash 存 config 表）
+    pub fn set_admin_pass(&self, hash: &str) {
+        let conn = self.0.lock().unwrap();
+        let _ = conn.execute(
+            "INSERT OR REPLACE INTO config (key, value) VALUES ('admin_pass', ?1)",
+            [hash],
+        );
+    }
+
+    pub fn get_admin_pass(&self) -> Option<String> {
+        let conn = self.0.lock().unwrap();
+        conn.query_row(
+            "SELECT value FROM config WHERE key = 'admin_pass'",
+            [],
+            |r| r.get(0),
+        )
+        .ok()
+    }
+
+    /// 全部用户（含最后在线时间），管理页用
+    pub fn list_users_full(&self) -> Vec<(i64, String, i64)> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = match conn.prepare("SELECT id, username, last_seen FROM users ORDER BY id") {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            .unwrap_or_default()
+    }
+
+    pub fn delete_user(&self, id: i64) -> bool {
+        let conn = self.0.lock().unwrap();
+        conn.execute("DELETE FROM users WHERE id = ?1", [id]).unwrap_or(0) > 0
+    }
+
+    /// 邀请码列表：(code, 是否已用, 创建时间)
+    pub fn list_invites(&self) -> Vec<(String, bool, i64)> {
+        let conn = self.0.lock().unwrap();
+        let mut stmt = match conn
+            .prepare("SELECT code, used_by IS NOT NULL, created_at FROM invites ORDER BY created_at DESC")
+        {
+            Ok(s) => s,
+            Err(_) => return vec![],
+        };
+        stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))
+            .map(|rows| rows.filter_map(|r| r.ok()).collect())
+            .unwrap_or_default()
+    }
 }
 
 /// 生成邀请码：XXXX-XXXX（去掉易混淆字符）

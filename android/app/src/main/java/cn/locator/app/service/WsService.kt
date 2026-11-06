@@ -75,10 +75,16 @@ class WsService : Service() {
                 ),
             )
             .build()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-        } else {
-            startForeground(NOTIF_ID, notif)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                startForeground(NOTIF_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
+            } else {
+                startForeground(NOTIF_ID, notif)
+            }
+        } catch (e: Exception) {
+            // Android 14：定位权限还没授予时以 location 类型启动会抛异常。
+            // 降级为普通前台服务保连接，等权限到位后 MainActivity 会重启服务升级类型。
+            runCatching { startForeground(NOTIF_ID, notif) }
         }
     }
 

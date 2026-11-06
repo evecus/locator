@@ -20,7 +20,12 @@ import cn.locator.app.ui.SetupScreen
 class MainActivity : ComponentActivity() {
 
     private val permLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+            // 权限到位后重启前台服务，使其升级为 location 类型（首次运行时服务可能已降级启动）
+            val s = Prefs.load(this) ?: return@registerForActivityResult
+            WsService.stop(this)
+            WsService.start(this, s.server, s.token)
+        }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

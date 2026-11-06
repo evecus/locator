@@ -20,19 +20,29 @@ pub struct PendingReq {
 
 #[derive(Default)]
 pub struct Hub {
-    /// 在线连接表：user_id -> 出站通道
-    conns: Mutex<HashMap<i64, mpsc::UnboundedSender<String>>>,
+    /// 在线连接表：user_id -> (出站通道, 会话代号)。同一账号重连时新会话覆盖旧会话，
+    /// 旧会话退出时凭代号比对，避免误删新会话的在线状态。
+    conns: Mutex<HashMap<i64, (mpsc::UnboundedSender<String>, u64)>>,
     /// 进行中的定位请求：request_id -> 请求方
     pending: Mutex<HashMap<String, PendingReq>>,
+    next_gen: std::sync::atomic::AtomicU64,
 }
 
 impl Hub {
-    pub fn insert(&self, user_id: i64, tx: mpsc::UnboundedSender<String>) {
-        self.conns.lock().unwrap().insert(user_id, tx);
+    pub fn insert(&self, user_id: i64, tx: mpsc::UnboundedSender<String>) -> u64 {
+        let gen = self
+            .next_gen
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        self.conns.lock().unwrap().insert(user_id, (tx, gen));
+        gen
     }
 
-    pub fn remove(&self, user_id: &i64) {
-        self.conns.lock().unwrap().remove(user_id);
+    /// 仅当会话代号匹配（仍是自己这届）时才移除
+    pub fn remove(&self, user_id: &i64, gen: u64) {
+        let mut conns = self.conns.lock().unwrap();
+        if matches!(conns.get(user_id), Some((_, g)) if *g == gen) {
+            conns.remove(user_id);
+        }
     }
 
     pub fn is_online(&self, user_id: i64) -> bool {
@@ -41,7 +51,7 @@ impl Hub {
 
     pub fn send_to(&self, user_id: i64, msg: &ServerMsg) -> bool {
         let json = serde_json::to_string(msg).unwrap_or_default();
-        if let Some(tx) = self.conns.lock().unwrap().get(&user_id) {
+        if let Some((tx, _)) = self.conns.lock().unwrap().get(&user_id) {
             tx.send(json).is_ok()
         } else {
             false
@@ -67,7 +77,7 @@ pub fn broadcast_device_list(state: &Arc<AppState>) {
     let msg = ServerMsg::DeviceList { devices };
     let json = serde_json::to_string(&msg).unwrap_or_default();
     let conns = state.hub.conns.lock().unwrap();
-    for tx in conns.values() {
+    for (tx, _) in conns.values() {
         let _ = tx.send(json.clone());
     }
 }
@@ -75,7 +85,7 @@ pub fn broadcast_device_list(state: &Arc<AppState>) {
 /// 单个 WS 会话主循环
 pub async fn run_session(state: Arc<AppState>, user_id: i64, username: String, socket: WebSocket) {
     let (out_tx, mut out_rx) = mpsc::unbounded_channel::<String>();
-    state.hub.insert(user_id, out_tx);
+    let gen = state.hub.insert(user_id, out_tx);
     state.db.touch(user_id);
     tracing::info!("设备上线: {user_id} {username}");
 
@@ -85,7 +95,7 @@ pub async fn run_session(state: Arc<AppState>, user_id: i64, username: String, s
         name: username.clone(),
     })
     .unwrap_or_default();
-    if let Some(tx) = state.hub.conns.lock().unwrap().get(&user_id) {
+    if let Some((tx, _)) = state.hub.conns.lock().unwrap().get(&user_id) {
         let _ = tx.send(hello);
     }
     broadcast_device_list(&state);
@@ -122,7 +132,7 @@ pub async fn run_session(state: Arc<AppState>, user_id: i64, username: String, s
         }
     }
 
-    state.hub.remove(&user_id);
+    state.hub.remove(&user_id, gen);
     tracing::info!("设备离线: {user_id} {username}");
     broadcast_device_list(&state);
 }

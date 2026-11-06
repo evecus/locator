@@ -50,6 +50,7 @@ object WsEngine {
     @Volatile private var wantConnected = false
     private var ws: WebSocket? = null
     private var backoffMs = 2000L
+    private var connectedKey: String? = null
 
     val connState = MutableStateFlow<ConnState>(ConnState.Offline)
     val devices = MutableStateFlow<List<Device>>(emptyList())
@@ -58,14 +59,20 @@ object WsEngine {
     val locResult: StateFlow<LocResult?> = _locResult
 
     fun connect(serverAddr: String, tokenStr: String) {
+        val key = "$serverAddr|$tokenStr"
+        // 同一凭据且已有活动连接/正在连接时，避免重复建连（注册后会触发两次 start）
+        if (wantConnected && key == connectedKey && ws != null) return
         server = serverAddr
         token = tokenStr
         wantConnected = true
+        connectedKey = key
+        ws?.cancel() // 干掉旧 socket，防止新旧两条监听打架
         open()
     }
 
     fun disconnect() {
         wantConnected = false
+        connectedKey = null
         ws?.close(1000, "bye")
         ws = null
         connState.value = ConnState.Offline
@@ -134,6 +141,8 @@ object WsEngine {
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
             val code = response?.code
             Log.w(TAG, "ws failure code=$code: ${t.message}")
+            // 只有当前活动 socket 的事件才驱动状态；被 cancel 的旧 socket 忽略
+            if (webSocket !== ws) return
             connState.value = ConnState.Offline
             if (code == 401) {
                 // 登录失效：停止无意义重连，提示重新登录
@@ -146,6 +155,7 @@ object WsEngine {
         }
 
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
+            if (webSocket !== ws) return
             connState.value = ConnState.Offline
             scheduleReconnect()
         }

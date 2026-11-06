@@ -8,6 +8,7 @@ mod auth;
 mod db;
 mod http;
 mod protocol;
+mod web;
 mod ws;
 
 use std::sync::Arc;
@@ -39,6 +40,13 @@ enum Cmd {
         #[arg(long, default_value_t = 1)]
         count: u32,
     },
+    /// 设置 /admin 管理页的登录密码
+    Passwd {
+        #[arg(long = "db", default_value = "locator.db")]
+        db_path: String,
+        #[arg(long)]
+        password: String,
+    },
 }
 
 pub struct AppState {
@@ -56,7 +64,19 @@ async fn main() {
     match Cli::parse().cmd {
         Cmd::Serve { addr, db_path, jwt_secret } => serve(&addr, &db_path, jwt_secret).await,
         Cmd::Invite { db_path, count } => invite(&db_path, count),
+        Cmd::Passwd { db_path, password } => passwd(&db_path, &password),
     }
+}
+
+fn passwd(db_path: &str, password: &str) {
+    if password.len() < 6 {
+        eprintln!("密码至少 6 位");
+        std::process::exit(1);
+    }
+    let database = db::Db::open(db_path).unwrap_or_else(|e| panic!("打开数据库失败: {e}"));
+    let hash = auth::hash_password(password).unwrap_or_else(|e| panic!("哈希失败: {e}"));
+    database.set_admin_pass(&hash);
+    println!("管理员密码已设置，访问 /admin 登录");
 }
 
 async fn serve(addr: &str, db_path: &str, jwt_secret: Option<String>) {

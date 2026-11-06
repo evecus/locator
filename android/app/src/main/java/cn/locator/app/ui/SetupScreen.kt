@@ -18,7 +18,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import cn.locator.app.net.Api
 import cn.locator.app.net.Prefs
-import cn.locator.app.service.WsService
 import kotlinx.coroutines.launch
 
 /**
@@ -125,7 +124,7 @@ fun SetupScreen(onDone: () -> Unit) {
                         result.fold(
                             onSuccess = { resp ->
                                 Prefs.save(ctx, server, resp)
-                                WsService.start(ctx, server, resp.token)
+                                // 服务由 AppRoot 的 LaunchedEffect(stored) 统一拉起，避免重复建连
                                 onDone()
                             },
                             onFailure = { errMsg = it.message ?: "请求失败" },

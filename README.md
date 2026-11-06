@@ -121,6 +121,29 @@ HTTP：`POST /api/register`（username+password+invite_code）、`POST /api/logi
 - 仅保留中英文资源（`resourceConfigurations`）
 - `abiFilters` 声明 arm64-v8a（本应用无 native 库，APK 天然全架构通用）
 
+## 七、网页端（/user 与 /admin）
+
+服务端自带两个网页（HTML/JS 内嵌在 Rust 源码里，无外部模板/静态文件）：
+
+| 路径 | 用途 |
+|---|---|
+| `https://域名/user` | **网页客户端**：注册/登录（和 APK 同一套账号）→ 设备列表 + 地图，可直接在浏览器请求其他设备定位；被请求时用浏览器 Geolocation 现场定位回传，网页端也能被定位 |
+| `https://域名/admin` | **管理后台**：设备列表 + 在线状态（5 秒刷新）、生成/查看邀请码、删除设备 |
+
+### 开启管理后台
+
+```bash
+locator-server passwd --db /var/lib/locator/locator.db --password 你的密码
+```
+
+设置后访问 `/admin` 用该密码登录即可，无需重启服务。
+
+### 技术说明
+
+- 网页地图用 Leaflet（jsdelivr CDN），瓦片默认高德（国内加载快），JS 侧做 WGS-84→GCJ-02 偏移转换，可切 OSM
+- 网页端登录态存 localStorage，WS 断线自动重连；token 失效连续 3 次握手失败自动退回登录页
+- 管理接口走 `Authorization: Bearer <jwt>`（管理员 user_id=0），与普通用户 token 同一套签名密钥
+
 ## 六、常用运维命令
 
 ```bash
