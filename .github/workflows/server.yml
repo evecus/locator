@@ -1,0 +1,49 @@
+name: server
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - ".github/workflows/server.yml"
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust 编译缓存
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+
+      - name: 编译 (linux x86_64)
+        working-directory: server
+        run: cargo build --release
+
+      - name: 收集产物
+        run: |
+          mkdir -p dist
+          cp server/target/release/locator-server dist/locator-server-linux-x86_64
+          sha256sum dist/locator-server-linux-x86_64 > dist/locator-server-linux-x86_64.sha256
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: locator-server-linux-x86_64
+          path: dist/
+
+      - name: 发布到 Release（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/locator-server-linux-x86_64
+            dist/locator-server-linux-x86_64.sha256

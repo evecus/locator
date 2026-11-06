@@ -1,0 +1,68 @@
+name: android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "android/**"
+      - ".github/workflows/android.yml"
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ubuntu-latest 自带 Android SDK，无需额外安装
+
+      # 从 Secrets 解出 release 签名 keystore（base64）。
+      # 需配置：ANDROID_KEYSTORE_B64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_ALIAS / ANDROID_KEY_PASSWORD
+      # 未配置时自动回退 debug 签名，保证构建不失败。
+      - name: 解码 keystore（可选）
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > "${{ github.workspace }}/release.keystore"
+            echo "KEystore 解码完成"
+          else
+            echo "未配置签名 Secret，将使用 debug 签名"
+          fi
+
+      - name: 编译 release APK (arm64)
+        working-directory: android
+        env:
+          KEYSTORE_FILE: ${{ github.workspace }}/release.keystore
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: 收集产物
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/*.apk dist/locator-arm64-release.apk
+          sha256sum dist/locator-arm64-release.apk > dist/locator-arm64-release.apk.sha256
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: locator-arm64-release
+          path: dist/
+
+      - name: 发布到 Release（仅 tag 触发）
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/locator-arm64-release.apk
+            dist/locator-arm64-release.apk.sha256

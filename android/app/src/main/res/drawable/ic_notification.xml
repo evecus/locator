@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 通知栏小图标：纯白剪影（系统自动染色） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2C8.13,2 5,5.13 5,8.5C5,13.75 12,22 12,22C12,22 19,13.75 19,8.5C19,5.13 15.87,2 12,2zM12,11C10.34,11 9,9.66 9,8C9,6.34 10.34,5 12,5C13.66,5 15,6.34 15,8C15,9.66 13.66,11 12,11z" />
+</vector>

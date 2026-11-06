@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标前景：地图钉，缩放到安全区内 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <group
+        android:scaleX="0.55"
+        android:scaleY="0.55"
+        android:pivotX="12"
+        android:pivotY="12">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M12,1.5C7.86,1.5 4.5,4.86 4.5,9C4.5,14.75 12,22.5 12,22.5C12,22.5 19.5,14.75 19.5,9C19.5,4.86 16.14,1.5 12,1.5zM12,11C10.34,11 9,9.66 9,8C9,6.34 10.34,5 12,5C13.66,5 15,6.34 15,8C15,9.66 13.66,11 12,11z" />
+    </group>
+</vector>

@@ -1,0 +1,13 @@
+# server
+server/target/
+*.db
+*.db-wal
+*.db-shm
+
+# android
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+*.apk.idsig

@@ -1,0 +1,18 @@
+# Caddy 反代示例：自动申请/续期 Let's Encrypt 证书
+# 把 loc.example.com 换成你的域名，DNS A 记录指向 VPS 公网 IP
+
+loc.example.com {
+    # 注册/登录接口
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    # WebSocket
+    handle /ws {
+        reverse_proxy 127.0.0.1:8080
+    }
+
+    handle {
+        respond "locator backend" 200
+    }
+}
