@@ -150,6 +150,9 @@ locator-server passwd --db /var/lib/locator/locator.db --password 你的密码
 # 生成邀请码
 locator-server invite --db /var/lib/locator/locator.db --count 5
 
+# 设置管理密码
+locator-server passwd --db /var/lib/locator/locator.db --password 你的密码
+
 # 查看日志
 journalctl -u locator -f
 
