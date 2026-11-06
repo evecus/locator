@@ -9,8 +9,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import cn.locator.app.loc.GeoConvert
 import cn.locator.app.net.WsEngine
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
@@ -19,7 +21,9 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * 地图页：请求某设备位置后展示其实时坐标（OSM 瓦片，免 key）
+ * 地图页：请求某设备位置后展示其实时坐标。
+ * 默认高德瓦片（国内加载快，坐标系 GCJ-02，marker 需偏移转换）；
+ * OSM 作为备选（无偏移，国内可能加载慢），右上角一键切换。
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -28,10 +32,43 @@ fun MapScreen(deviceName: String, onBack: () -> Unit) {
     val err by WsEngine.error.collectAsState()
     val conn by WsEngine.connState.collectAsState()
 
+    var useGaode by remember { mutableStateOf(true) }
     var mapView by remember { mutableStateOf<MapView?>(null) }
     var marker by remember { mutableStateOf<Marker?>(null) }
 
     val timeFmt = remember { SimpleDateFormat("HH:mm:ss", Locale.CHINA) }
+
+    val gaodeSource = remember {
+        XYTileSource(
+            "Gaode", 3, 18, 256, ".png",
+            arrayOf(
+                "https://wprd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
+                "https://wprd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
+                "https://wprd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
+                "https://wprd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scl=1&style=7&x={x}&y={y}&z={z}",
+            ),
+        )
+    }
+
+    // 按当前瓦片源把 WGS-84 定位结果换算成屏幕坐标（高德=GCJ-02，OSM 原样）
+    fun displayPoint(l: WsEngine.LocResult): GeoPoint {
+        val (la, ln) = if (useGaode) GeoConvert.wgs84ToGcj02(l.lat, l.lng) else (l.lat to l.lng)
+        return GeoPoint(la, ln)
+    }
+
+    fun applyLocation(l: WsEngine.LocResult) {
+        val mv = mapView ?: return
+        val point = displayPoint(l)
+        val m = marker ?: Marker(mv).also { marker = it }
+        mv.overlays.remove(m)
+        m.position = point
+        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+        m.title = deviceName
+        mv.overlays.add(m)
+        mv.controller.animateTo(point)
+        mv.controller.setZoom(16.0)
+        mv.invalidate()
+    }
 
     Scaffold(
         topBar = {
@@ -39,6 +76,11 @@ fun MapScreen(deviceName: String, onBack: () -> Unit) {
                 title = { Text(deviceName) },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("返回") }
+                },
+                actions = {
+                    TextButton(onClick = { useGaode = !useGaode }) {
+                        Text(if (useGaode) "高德" else "OSM")
+                    }
                 },
             )
         },
@@ -48,7 +90,6 @@ fun MapScreen(deviceName: String, onBack: () -> Unit) {
                 .padding(pad)
                 .fillMaxSize(),
         ) {
-            // 状态条
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 when {
                     loc != null -> {
@@ -74,14 +115,6 @@ fun MapScreen(deviceName: String, onBack: () -> Unit) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Spacer(Modifier.height(4.dp))
-                Row {
-                    TextButton(
-                        contentPadding = PaddingValues(0.dp),
-                        onClick = { WsEngine.clearLocation() },
-                    ) { Text("清空", fontSize = 13.sp) }
-                    Spacer(Modifier.width(16.dp))
-                }
             }
 
             Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -89,7 +122,7 @@ fun MapScreen(deviceName: String, onBack: () -> Unit) {
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
                         MapView(ctx).apply {
-                            setTileSource(TileSourceFactory.MAPNIK)
+                            setTileSource(gaodeSource)
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
                             mapView = this
@@ -114,17 +147,14 @@ fun MapScreen(deviceName: String, onBack: () -> Unit) {
 
     // 收到新位置：放 marker 并居中
     LaunchedEffect(loc) {
-        val l = loc ?: return@LaunchedEffect
+        loc ?: return@LaunchedEffect
+        applyLocation(loc!!)
+    }
+
+    // 切换瓦片源：重设 tileSource 并重算 marker 坐标偏移
+    LaunchedEffect(useGaode) {
         val mv = mapView ?: return@LaunchedEffect
-        val point = GeoPoint(l.lat, l.lng)
-        val m = marker ?: Marker(mv).also { marker = it }
-        mv.overlays.remove(m)
-        m.position = point
-        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
-        m.title = deviceName
-        mv.overlays.add(m)
-        mv.controller.animateTo(point)
-        mv.controller.setZoom(16.0)
-        mv.invalidate()
+        mv.setTileSource(if (useGaode) gaodeSource else TileSourceFactory.MAPNIK)
+        loc?.let { applyLocation(it) }
     }
 }
